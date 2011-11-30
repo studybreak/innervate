@@ -1,0 +1,17 @@
+{
+  "name": "innervate",
+  "description": "Isomorphic JS views for Node",
+  "version": "0.0.1",
+  "author": "Allan Carroll <allanca@gmail.com>",
+  "contributors": [
+  ],
+  "repository": {
+    "type": "git",
+    "url": "http://github.com/allanca/innervate.git"
+  },
+  "dependencies": {
+    "jade": "0.16.x"
+  },
+  "main": "./lib/innervate",
+  "engines": { "node": ">= 0.4.0" }
+}
