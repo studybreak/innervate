@@ -9,7 +9,7 @@
     "url": "http://github.com/allanca/innervate.git"
   },
   "dependencies": {
-    "jade": "0.16.x",
+    "jade": "0.18.x",
     "underscore": "1.2.x"
   },
   "main": "./lib/innervate",
