@@ -1,3 +1,7 @@
+//  index.js
+//  (c) 2011 StudyBreak Inc; Allan Carroll <allan@studybreak.com>
+//  Innervate is freely distributable under the MIT license.
+
 //var exports = module.exports = require('./lib/innervate');
 
 var findit = require('findit');
@@ -54,6 +58,8 @@ var exports = module.exports = function (options) {
 
 /**
  * Client side wrapper code (minified).
+ * Runtime borrowed from JadeVu [https://github.com/LearnBoost/jadevu]
+ * Copyright (c) 2011 Guillermo Rauch <guillermo@learnboost.com>
  */
 
 var runtime = ''
