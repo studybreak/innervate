@@ -7,8 +7,12 @@
 var findit = require('findit');
 var fs = require('fs');
 var jade = require('jade');
-var jsp = require("uglify-js").parser;
-var pro = require("uglify-js").uglify;
+var uglify = require("uglify-js");
+
+
+// TODO: decide how views are rendered server side and how models are specified.
+// Also, how do models/collections and views correspond. Always 1-1 from view
+// to one or the other?
 
 
 var exports = module.exports = function (options) {
@@ -18,28 +22,26 @@ var exports = module.exports = function (options) {
   options.require = options.require && !Array.isArray(options.require) ?
                     [options.require] : (options.require || []);
 
-  var templates = [];
+  // TODO: Add file watching support for easier use in development.
 
-  templates.push(runtime);
+  var text = options.require
+      // Gather a list of all files in the require directory and below.
+      .map(findit.sync)
+      // Flatten the list.
+      .reduce(function (memo, files) { return memo.concat(files); })
+      // Read the files' contents.
+      .map(function (file) { return [file, fs.readFileSync(file, 'utf8')]; })
+      // Filter the content using the file-extension based filter.
+      .map(function (file) {
+        var ext = file[0].split('.').slice(-1)[0];
+        return filters[ext] && filters[ext](file[0], file[1], options);
+      })
+      // Remove the output of any files with no specified filter.
+      .filter(function (text) { return text; });
 
-  // Iterate over all the required paths and compile the jade templates
-  for (var i = options.require.length - 1; i >= 0; i--) {
+  text.unshift(runtime);
 
-    // Recurse through the paths and gather a list of all potential templates
-    var files = findit.sync(options.require[i]);
-    for (var j = files.length - 1; j >= 0; j--) {
-
-	    // Filter out non .jade files
-	    if (files[j].substr(-5) !== '.jade') continue;
-
-		  // Take the extension and path off the filename and use as a template id.
-		  var id = files[j].split('/').slice(-1)[0].split('.')[0];
-
-	    templates.push('window.iv._[' + id + ']=' + compile(files[j]) + ';');
-    }
-  }
-
-  var output = minify(templates.join(''));
+  var output = minify(text.join(''));
 
   var self = function (req, res, next) {
     if (req.url.split('?')[0] !== options.mount) return next();
@@ -50,10 +52,86 @@ var exports = module.exports = function (options) {
     res.end(output);
   };
 
-  self.modified = new Date;
+  self.modified = new Date();
 
   return self;
 };
+
+
+// TODO: figure out how filters correspond to a namespace better, not just the
+// template namespace. Should be easy to specify which kind of thing the file is
+
+
+/**
+ *
+ */
+
+var filters = {
+  /**
+   *
+   */
+
+  js: function (filename, text, options) {
+    return text;
+  },
+
+  /**
+   *
+   */
+
+  // TODO: Make IV template agnostic. Probably needs ability to pass in filters
+  // that produce js functions for template types
+  jade: function (filename, text, options) {
+    options = options || {};
+    options.compileDebug = false;
+
+    try {
+      // Compile the template
+      var parser = new jade.Parser(String(text), filename, options);
+      var js = new jade.Compiler(parser.parse(), options).compile();
+
+      // Take the extension and path off the filename and use as a template id.
+      var id = filename.split('/').slice(-1)[0].split('.')[0];
+
+      return ''
+      + 'window.iv._[' + id + ']='
+      + 'function (locals) {'
+      +   'var buf = [], t = window.iv, attrs = t.$a, escape = t.$e;'
+      +   'with (locals || {}) {' + js + '};'
+      +   'return buf.join("");'
+      + '};';
+    }
+    catch (err) {
+      parser = parser.context();
+      jade.runtime.rethrow(err, parser.filename, parser.lexer.lineno);
+    }
+  }
+};
+
+
+/**
+ *
+ */
+
+function minify (js) {
+	var ast = uglify.parser.parse(js); // parse code and get the initial AST
+	ast = uglify.uglify.ast_mangle(ast); // get a new AST with mangled names
+	ast = uglify.uglify.ast_squeeze(ast); // get an AST with compression optimizations
+	return uglify.uglify.gen_code(ast, {beautify: false}); // compressed code here
+}
+
+
+/**
+ * Stringify a runtime jade function preserving minification
+ */
+
+function stringify (fn) {
+  return fn.toString().replace(/\n/g, '');
+}
+
+
+// TODO: Make the templates more ICH-like with syntax like iv.templatename({})
+// TODO: Add logic to detect duplicate template names
 
 
 /**
@@ -95,53 +173,3 @@ var runtime = ''
         + ';'
   +   'if (!w.iv) w.iv = t;'
   + '})();';
-
-
-/**
- *
- */
-
-function compile (path, options) {
-	options = options || {compileDebug: false};
-
-  // Read the file contents
-  var text = fs.readFileSync(path, 'utf8');
-
-  // Compile the template
-  try {
-    var parser = new jade.Parser(String(text), path, options);
-    var js = new jade.Compiler(parser.parse(), options).compile();
-
-    return ''
-    + 'function (locals) {'
-    +   'var buf = [], t = window.iv, attrs = t.$a, escape = t.$e;'
-    +   'with (locals || {}) {' + js + '};'
-    +   'return buf.join("");'
-    + '}';
-  }
-  catch (err) {
-    parser = parser.context();
-    jade.runtime.rethrow(err, parser.filename, parser.lexer.lineno);
-  }
-}
-
-
-/**
- *
- */
-
-function minify (js) {
-	var ast = jsp.parse(js);    // parse code and get the initial AST
-	ast = pro.ast_mangle(ast);  // get a new AST with mangled names
-	ast = pro.ast_squeeze(ast); // get an AST with compression optimizations
-	return pro.gen_code(ast, {beautify: true});   // compressed code here
-}
-
-
-/**
- * Stringify a runtime jade function preserving minification
- */
-
-function stringify (fn) {
-  return fn.toString().replace(/\n/g, '');
-}
